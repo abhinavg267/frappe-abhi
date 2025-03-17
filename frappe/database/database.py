@@ -19,6 +19,7 @@ from pypika.terms import Criterion, NullValue
 import frappe
 import frappe.defaults
 from frappe import _
+from frappe.database.simple_file_logger import SimpleFileLogger
 from frappe.database.utils import (
 	DefaultOrderBy,
 	EmptyQueryValues,
@@ -103,6 +104,8 @@ class Database:
 
 		# self.db_type: str
 		# self.last_query (lazy) attribute of last sql query executed
+
+		self.q_logger = SimpleFileLogger(log_file='sql_log/log01.log')
 
 	def setup_type_map(self):
 		pass
@@ -228,6 +231,12 @@ class Database:
 
 		try:
 			self._cursor.execute(query, values)
+
+			parsed_query = self._cursor.mogrify(query, values).decode("utf-8").lower()
+			other_statements = ['commit;', 'start transaction;']
+			if not parsed_query.startswith("select") and parsed_query not in other_statements:
+				self.q_logger.info(f"{parsed_query};")
+
 		except Exception as e:
 			if self.is_syntax_error(e):
 				frappe.log(f"Syntax error in query:\n{query} {values or ''}")
